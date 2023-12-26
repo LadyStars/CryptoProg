@@ -1,26 +1,62 @@
-#include <iostream>  
-#include <fstream>  
-#include <cryptopp/sha.h>  
-#include <cryptopp/hex.h>  
-#include <cryptopp/filters.h>  
-#include <cryptopp/files.h>  
-  
-using namespace CryptoPP;  
-  
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <cryptopp/cryptlib.h>
+#include <cryptopp/hex.h>
+#include <cryptopp/files.h>
+#include <cryptopp/aes.h>
+#include <cryptopp/modes.h>
+#include <cryptopp/sha.h>
+#include <cryptopp/pwdbased.h> 
 
-int main()
-{
-    CryptoPP::SHA256 hash;
-    std::string message = "Welcome";
+using namespace CryptoPP;
 
-    byte digest[CryptoPP::SHA256::DIGESTSIZE];
-    hash.CalculateDigest(digest, (byte*)message.c_str(), message.length());
 
-    std::cout << "Hash: ";
-    for (int i = 0; i < CryptoPP::SHA256::DIGESTSIZE; i++) {
-        std::cout << std::hex << (int)digest[i];
+void encrypt(const std::string& inputFile, const std::string& outputFile, const std::string& password) {
+    SecByteBlock key(AES::DEFAULT_KEYLENGTH);
+    PKCS12_PBKDF<SHA256> pbkdf;
+    pbkdf.DeriveKey(key, key.size(), 0, (byte*)password.data(), password.size(), NULL, 0, 1024, 0.0f);
+
+    byte iv[AES::BLOCKSIZE];
+    memset(iv, 0x00, AES::BLOCKSIZE); 
+
+    CBC_Mode<AES>::Encryption enc(key, key.size(), iv);
+    FileSource fs(inputFile.c_str(), true, 
+                  new StreamTransformationFilter(enc, 
+                  new FileSink(outputFile.c_str())));
+}
+
+void decrypt(const std::string& inputFile, const std::string& outputFile, const std::string& password) {
+    SecByteBlock key(AES::DEFAULT_KEYLENGTH);
+    PKCS12_PBKDF<SHA256> pbkdf;
+    pbkdf.DeriveKey(key, key.size(), 0, (byte*)password.data(), password.size(), NULL, 0, 1024, 0.0f);
+
+    byte iv[AES::BLOCKSIZE];	
+    memset(iv, 0x00, AES::BLOCKSIZE);
+
+    CBC_Mode<AES>::Decryption dec(key, key.size(), iv);
+    FileSource fs(inputFile.c_str(), true, new StreamTransformationFilter(dec, new FileSink(outputFile.c_str())));
+}
+
+int main() {
+    std::string mode, inputFile, outputFile, password;
+    std::cout << "Введите режим работы (e(ncrypt)/d(ecrypt)): ";
+    std::cin >> mode;
+    std::cout << "Введите путь к входному файлу: ";
+    std::cin >> inputFile;
+    std::cout << "Введите путь к выходному файлу: ";
+    std::cin >> outputFile;
+    std::cout << "Введите пароль: ";
+    std::cin >> password;
+    if (mode == "e") {
+        encrypt(inputFile, outputFile, password);
+    } 
+    else if (mode == "d") {
+        decrypt(inputFile, outputFile, password);
+    } 
+    else {
+        std::cout << "Неверный режим" << std::endl;
     }
-    std::cout << std::endl;
 
     return 0;
 }
